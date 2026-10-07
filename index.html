@@ -1,0 +1,133 @@
+<!DOCTYPE html><html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0f1115"><title>ФитДом</title>
+<style>
+:root{--bg:#0f1115;--c:#1a1d24;--c2:#242833;--t:#eef0f4;--m:#8b93a3;--a:#3ddc97}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--t);font:16px system-ui,sans-serif;padding-bottom:90px}
+#v{padding:16px;max-width:560px;margin:auto;animation:f .25s}
+@keyframes f{from{opacity:0;transform:translateY(6px)}}
+h2{margin:4px 0 12px}h3{margin:0 0 8px;font-size:14px;color:var(--m);font-weight:600}
+.card{background:var(--c);border-radius:16px;padding:14px;margin-bottom:12px}
+button,input,select{font:inherit;color:var(--t)}
+.btn{display:block;width:100%;padding:16px;border:0;border-radius:14px;background:var(--a);color:#06281a;font-weight:700;font-size:17px;margin:8px 0}
+.btn.s{background:var(--c2);color:var(--t)}
+input,select{width:100%;padding:13px;background:var(--c2);border:0;border-radius:12px;margin:4px 0 10px}
+label{font-size:13px;color:var(--m)}
+.row{display:flex;gap:8px;align-items:center}.row>*{flex:1}
+.bar{height:10px;background:var(--c2);border-radius:6px;overflow:hidden;margin:6px 0}
+.bar i{display:block;height:100%;background:var(--a);transition:width .4s}
+nav{position:fixed;bottom:0;left:0;right:0;display:flex;background:var(--c);padding:6px 4px calc(6px + env(safe-area-inset-bottom))}
+nav button{flex:1;background:none;border:0;color:var(--m);padding:6px 0;font-size:11px}
+nav button b{display:block;font-size:22px}nav .on{color:var(--a)}
+.big{font-size:34px;font-weight:700}.m{color:var(--m);font-size:13px}
+.it{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--c2)}
+</style></head><body><div id="v"></div><nav id="n"></nav>
+<script>
+// ---------- Состояние и хранилище ----------
+const $=s=>document.querySelector(s),R=Math.round,D=d=>(d||new Date()).toLocaleDateString('sv');
+let S=JSON.parse(localStorage.getItem('fit1')||'null')||{p:null,food:{},cu:[],w:[],logs:{},hab:{},lvl:{},rem:'18:00'};
+const save=()=>localStorage.setItem('fit1',JSON.stringify(S));
+let tab='today',T=D(),W=null,P=null,rg=30,tm;
+const dow=()=>(new Date().getDay()+6)%7;
+// ---------- Базы: продукты на 100 г [имя, ккал, Б, Ж, У] ----------
+const FOODS=[['Куриная грудка',165,31,3.6,0],['Яйцо',157,13,11,1],['Творог 5%',121,17,5,3],['Гречка варёная',110,4,1,21],['Рис варёный',130,3,.3,28],['Овсянка сухая',370,13,7,60],['Хлеб',250,8,3,49],['Банан',89,1,.3,23],['Яблоко',52,.3,.2,14],['Молоко 2.5%',52,3,2.5,5],['Кефир 1%',40,3,1,4],['Говядина',187,19,12,0],['Тунец консервированный',96,22,1,0],['Картофель варёный',82,2,.4,17],['Макароны варёные',158,5,1,31],['Масло растительное',899,0,100,0],['Сыр',350,25,27,0],['Огурец',15,.8,.1,3],['Помидор',20,1,.2,4],['Йогурт греческий',66,9,2,4]];
+// Упражнения: [название, уровни от лёгкого к тяжёлому, подходов, повторений]
+const EX={sq:['Приседания',['Обычные','С паузой 2 с','С рюкзаком'],3,12],bul:['Болгарские сплит-приседания',['Без веса','С гантелями','С рюкзаком'],3,10],gl:['Ягодичный мостик',['Двумя ногами','С рюкзаком','На одной ноге'],3,15],ca:['Подъёмы на носки',['Двумя ногами','С гантелями','На одной ноге'],3,15],pu:['Отжимания',['От шведской стенки','Классические','С рюкзаком'],3,10],pl:['Подтягивания',['Негативы','С помощью ног','Обычные'],3,5],au:['Австралийские подтягивания',['Высокий угол','Средний угол','Низкий угол'],3,10],la:['Гантели в стороны',['3 кг медленно','3 кг с паузой','3 кг пульсация'],3,15],cu:['Сгибания на бицепс',['3 кг','3 кг медленно','Рюкзак в руках'],3,12],lr:['Подъёмы ног в висе',['Колени','Согнутые ноги','Прямые ноги'],3,10],pk:['Планка (секунды)',['На коленях','Классическая','С рюкзаком'],3,40]};
+const PLAN=[['Низ','sq bul gl ca'],['Верх','pu pl au la cu'],['Лёгкий день',''],['Низ','sq bul gl ca'],['Верх','pu pl au la cu'],['Кор + ходьба','lr pk'],['Отдых','']];
+// ---------- Расчёты ----------
+function calc(p){const b=10*p.w+6.25*p.h-5*p.age+5,t=b*p.act; // Миффлин-Сан Жеор, мужчина
+p.bmr=R(b);p.tdee=R(t);p.kcal=R(t-400);p.prot=125;p.fat=R(p.kcal*.25/9);p.carb=R((p.kcal-p.prot*4-p.fat*9)/4);p.water=+(p.w*.033).toFixed(1)}
+const bar=(v,m)=>`<div class="bar"><i style="width:${Math.min(100,v/m*100)}%"></i></div>`;
+const tot=d=>(S.food[d]||[]).reduce((a,e)=>(a.k+=e.k,a.p+=e.p,a.f+=e.f,a.c+=e.c,a),{k:0,p:0,f:0,c:0});
+const last=id=>{for(const d of Object.keys(S.logs).sort().reverse()){const s=S.logs[d][id];if(s&&s.length)return s}return null};
+// ---------- Экран «Сегодня» ----------
+window.setH=(k,v)=>{(S.hab[T]=S.hab[T]||{})[k]=k=='easy'?v:+v;save();view()};
+function today(){const p=S.p,f=tot(T),h=S.hab[T]||{},d=PLAN[dow()];
+return `<h2>Сегодня</h2><div class="card"><h3>План: ${d[0]}</h3>${d[1]?`<div class="m">${d[1].split(' ').map(x=>EX[x][0]).join(', ')}</div><button class="btn" onclick="startW()">Начать тренировку</button>`:'<div class="m">Без силовой: шаги, вода, растяжка</div>'}</div>
+<div class="card"><h3>Калории: ${R(f.k)} из ${p.kcal}</h3>${bar(f.k,p.kcal)}<div class="m">Осталось ${R(p.kcal-f.k)} ккал</div><h3 style="margin-top:12px">Белок: ${R(f.p)} из ${p.prot} г</h3>${bar(f.p,p.prot)}</div>
+<div class="card"><h3>Привычки</h3>
+<label>Шаги (цель ${p.steps})</label><input type="number" value="${h.steps||''}" onchange="setH('steps',this.value)">${bar(h.steps||0,p.steps)}
+<label>Вода: ${(h.water||0).toFixed(2)} из ${p.water} л</label>${bar(h.water||0,p.water)}
+<div class="row"><button class="btn s" onclick="setH('water',Math.max(0,(S.hab[T]||{}).water-.25||0))">−250</button><button class="btn" onclick="setH('water',((S.hab[T]||{}).water||0)+.25)">+250 мл</button></div>
+<label>Сон, ч (цель 7–9)</label><input type="number" step="0.5" value="${h.sleep||''}" onchange="setH('sleep',this.value)">
+<label><input type="checkbox" style="width:auto" ${h.easy?'checked':''} onchange="setH('easy',this.checked)"> Был лёгкий день</label></div>`}
+// ---------- Питание ----------
+window.addF=()=>{const x=[...FOODS,...S.cu].find(a=>a[0]==$('#fn').value),g=+$('#fg').value;if(!x||!g)return alert('Выбери продукт из списка и укажи граммы');const q=g/100;(S.food[T]=S.food[T]||[]).push({n:x[0],g,m:$('#fm').value,k:x[1]*q,p:x[2]*q,f:x[3]*q,c:x[4]*q});save();view()};
+window.addC=()=>{const n=$('#cn').value.trim();if(!n)return;S.cu.push([n,...['ck','cp','cf','cc'].map(i=>+$('#'+i).value)]);save();view()};
+window.delF=i=>{S.food[T].splice(i,1);save();view()};
+window.copyY=()=>{const y=D(new Date(Date.now()-864e5));S.food[T]=[...(S.food[T]||[]),...(S.food[y]||[]).map(e=>({...e}))];save();view()};
+function food(){const f=tot(T),p=S.p,l=S.food[T]||[];
+return `<h2>Питание</h2><div class="card"><div class="big">${R(f.k)} <span class="m">/ ${p.kcal} ккал</span></div>${bar(f.k,p.kcal)}<div class="m">Белок ${R(f.p)}/${p.prot} г · Жиры ${R(f.f)}/${p.fat} · Углеводы ${R(f.c)}/${p.carb}</div>${bar(f.p,p.prot)}</div>
+<div class="card"><h3>Добавить</h3><input id="fn" list="fl" placeholder="Продукт"><datalist id="fl">${[...FOODS,...S.cu].map(a=>`<option value="${a[0]}">`).join('')}</datalist>
+<div class="row"><input id="fg" type="number" placeholder="Граммы"><select id="fm"><option>Завтрак</option><option>Обед</option><option>Ужин</option><option>Перекус</option></select></div>
+<button class="btn" onclick="addF()">Добавить</button><button class="btn s" onclick="copyY()">Скопировать вчерашний день</button></div>
+<div class="card"><h3>Съедено</h3>${l.map((e,i)=>`<div class="it"><span>${e.m}: ${e.n}, ${e.g} г<br><span class="m">${R(e.k)} ккал · Б ${R(e.p)}</span></span><button class="btn s" style="width:56px;margin:0" onclick="delF(${i})">✕</button></div>`).join('')||'<div class="m">Пока пусто</div>'}</div>
+<div class="card"><h3>Свой продукт (на 100 г)</h3><input id="cn" placeholder="Название"><div class="row"><input id="ck" type="number" placeholder="ккал"><input id="cp" type="number" placeholder="Б"></div><div class="row"><input id="cf" type="number" placeholder="Ж"><input id="cc" type="number" placeholder="У"></div><button class="btn s" onclick="addC()">Сохранить продукт</button></div>`}
+// ---------- Тренировки ----------
+function train(){const t=dow();
+return `<h2>Тренировки</h2><button class="btn" onclick="startW()">Начать: ${PLAN[t][0]}</button><div class="card"><h3>Неделя</h3>${PLAN.map((d,i)=>`<div class="it"><span${i==t?' style="color:var(--a)"':''}>${'Пн Вт Ср Чт Пт Сб Вс'.split(' ')[i]} · ${d[0]}</span></div>`).join('')}</div>
+<div class="card"><h3>Уровень упражнений</h3>${Object.entries(EX).map(([k,e])=>`<label>${e[0]}</label><select onchange="S.lvl.${k}=+this.value;save()">${e[1].map((n,i)=>`<option value="${i}"${(S.lvl[k]||0)==i?' selected':''}>${i+1}. ${n}</option>`).join('')}</select>`).join('')}</div>
+<div class="card"><h3>Журнал</h3>${Object.keys(S.logs).sort().reverse().slice(0,5).map(d=>`<div class="m"><b>${d}</b><br>${Object.entries(S.logs[d]).map(([k,s])=>EX[k][0]+': '+s.map(x=>x.r+(x.kg?'×'+x.kg+'кг':'')).join(', ')).join('<br>')}</div>`).join('<hr>')||'<div class="m">Пока пусто</div>'}</div>`}
+window.startW=()=>{const q=PLAN[dow()][1].split(' ').filter(Boolean);if(!q.length)return alert('Сегодня без силовой тренировки');W={q,i:0,res:{},rest:0};tab='work';view()};
+const beep=()=>{try{const c=new AudioContext(),o=c.createOscillator();o.connect(c.destination);o.frequency.value=880;o.start();setTimeout(()=>{o.stop();c.close()},400)}catch(e){}};
+window.ch=(i,s)=>{const x=$('#'+i);x.value=Math.max(0,+x.value+s)};
+const st=(i,v,s)=>`<div class="row"><button class="btn s" onclick="ch('${i}',-${s})">−</button><input id="${i}" type="number" value="${v}" style="text-align:center;font-size:24px"><button class="btn s" onclick="ch('${i}',${s})">+</button></div>`;
+function work(){const id=W.q[W.i],e=EX[id],rs=W.res[id]||[],lv=S.lvl[id]||0;
+if(W.rest>0)return `<h2>Отдых</h2><div class="card" style="text-align:center"><div class="big" style="font-size:80px">${W.rest}</div><div class="m">Дальше: ${e[0]}</div><button class="btn s" onclick="W.rest=0;clearInterval(tm);view()">Пропустить</button></div>`;
+const pv=rs[rs.length-1],r=pv?pv.r:e[3],kg=pv?pv.kg:((last(id)||[{kg:0}])[0].kg);
+return `<h2>${e[0]}</h2><div class="card"><div class="m">${e[1][lv]} · подход ${rs.length+1} из ${e[2]} · упражнение ${W.i+1}/${W.q.length}</div><label>Повторения (цель ${e[3]})</label>${st('wr',r,1)}<label>Вес рюкзака, кг</label>${st('wk',kg,1)}<button class="btn" onclick="doSet()">Подход выполнен</button></div><button class="btn s" onclick="tab='train';W=null;view()">Выйти</button>`}
+window.doSet=()=>{const id=W.q[W.i],e=EX[id];(W.res[id]=W.res[id]||[]).push({r:+$('#wr').value,kg:+$('#wk').value});
+if(W.res[id].length>=e[2]){W.i++;if(W.i>=W.q.length)return fin()}
+W.rest=75;clearInterval(tm);tm=setInterval(()=>{if(--W.rest<=0){clearInterval(tm);W.rest=0;beep();navigator.vibrate&&navigator.vibrate([300,100,300])}if(tab=='work')view()},1000);view()};
+// Прогрессия: что усложнить в следующий раз
+const sug=id=>{const e=EX[id],s=W.res[id]||[];if(!s.length)return'';const ok=s.every(x=>x.r>=e[3]),kg=Math.max(...s.map(x=>x.kg)),lv=S.lvl[id]||0;
+return e[0]+': '+(!ok?'держи нагрузку, добери повторения':kg>0?'добавь 1 кг в рюкзак или опускайся медленнее':lv<2?`перейди на уровень «${e[1][lv+1]}»`:'+1 повторение, негатив 3 секунды')};
+function fin(){S.logs[T]={...(S.logs[T]||{}),...W.res};save();W.sug=Object.keys(W.res).map(sug);tab='done';view()}
+const done=()=>`<h2>Готово! 💪</h2><div class="card"><h3>В следующий раз</h3>${W.sug.map(s=>`<div class="it">${s}</div>`).join('')}</div><button class="btn" onclick="tab='today';W=null;view()">На главный</button>`;
+// ---------- Прогресс ----------
+window.addW=()=>{const w=+$('#bw').value;if(!w)return;S.w=S.w.filter(x=>x.d!=T);S.w.push({d:T,w,waist:+$('#bwa').value||0,bf:+$('#bbf').value||0});S.w.sort((a,b)=>a.d<b.d?-1:1);save();view()};
+function chart(){let a=S.w;if(rg)a=a.filter(x=>x.d>=D(new Date(Date.now()-rg*864e5)));if(a.length<2)return'<div class="m">Нужно минимум 2 записи веса</div>';
+const ma=a.map((_,i)=>{const s=a.slice(Math.max(0,i-6),i+1);return s.reduce((t,x)=>t+x.w,0)/s.length}),v=a.map(x=>x.w),lo=Math.min(...v)-.3,hi=Math.max(...v)+.3,X=i=>10+i*300/(a.length-1),Y=y=>110-(y-lo)/(hi-lo)*100,pt=ar=>ar.map((y,i)=>X(i)+','+Y(y)).join(' ');
+return `<svg viewBox="0 0 320 120" width="100%"><polyline points="${pt(v)}" fill="none" stroke="#555d70" stroke-width="2"/><polyline points="${pt(ma)}" fill="none" stroke="#3ddc97" stroke-width="3"/></svg><div class="m">Серый: вес, зелёный: скользящее среднее (7 записей). ${Math.min(...v)}–${Math.max(...v)} кг</div>`}
+function fc(){const a=S.w;if(!a.length)return'';const l=a[a.length-1],f=a[0],g=S.p.gw;if(l.w<=g)return 'Цель по весу достигнута!';
+const dd=(new Date(l.d)-new Date(f.d))/864e5,r=dd>=7?(f.w-l.w)/dd*7:.4;if(r<=.05)return 'При текущей динамике цель не приближается: проверь питание и шаги.';
+const wk=(l.w-g)/r;return `Прогноз до ${g} кг: ~${Math.ceil(wk)} нед. (темп ${r.toFixed(2)} кг/нед), около ${D(new Date(Date.now()+wk*6048e5))}`}
+function rep(){const p=S.p,ds=[...Array(7)].map((_,i)=>D(new Date(Date.now()-i*864e5))),fd=ds.filter(d=>(S.food[d]||[]).length),av=k=>fd.length?fd.reduce((s,d)=>s+tot(d)[k],0)/fd.length:0,ak=av('k'),ap=av('p'),tr=ds.filter(d=>S.logs[d]).length,ws=S.w.filter(x=>x.d>=ds[6]),dw=ws.length>1?ws[ws.length-1].w-ws[0].w:null,hb=ds.filter(d=>{const h=S.hab[d]||{};return(h.steps||0)>=p.steps*.9&&(h.water||0)>=p.water*.9}).length;
+const tip=tr<3?'Добавь тренировки: цель 4 в неделю.':ak>p.kcal+150?'Калории выше цели: сократи перекусы.':ap&&ap<p.prot*.9?'Не добираешь белок: творог, яйца, курица.':dw!=null&&dw<-.8?'Вес падает быстро: добавь 100–200 ккал, чтобы не терять мышцы.':dw!=null&&dw>=0?'Вес стоит: проверь учёт еды и добавь шагов.':'Отличная неделя, держи курс.';
+return `<div class="card"><h3>Отчёт за 7 дней</h3><div class="it"><span>Калории (ср.)</span><b>${R(ak)}</b></div><div class="it"><span>Белок (ср.)</span><b>${R(ap)} г</b></div><div class="it"><span>Изменение веса</span><b>${dw==null?'—':dw.toFixed(1)+' кг'}</b></div><div class="it"><span>Тренировок</span><b>${tr}</b></div><div class="it"><span>Дней с шагами и водой</span><b>${hb}/7</b></div><p><b>Совет:</b> ${tip}</p></div>`}
+function prog(){const l=S.w[S.w.length-1]||{};
+return `<h2>Прогресс</h2><div class="card"><h3>Замеры сегодня</h3><div class="row"><input id="bw" type="number" step="0.1" placeholder="Вес" value="${l.w||''}"><input id="bwa" type="number" step="0.5" placeholder="Талия"><input id="bbf" type="number" step="0.5" placeholder="% жира"></div><button class="btn" onclick="addW()">Сохранить</button></div>
+<div class="card"><div class="row">${[[7,'Неделя'],[30,'Месяц'],[0,'Всё']].map(([n,t])=>`<button class="btn ${rg==n?'':'s'}" onclick="rg=${n};view()">${t}</button>`).join('')}</div>${chart()}<p class="m">${fc()}</p></div>${rep()}`}
+// ---------- Настройки / онбординг ----------
+const ks=['age','h','w','bf','gw','kcal','prot','fat','carb','water','steps','sleep'];
+const rd=()=>{ks.forEach(k=>P[k]=+$('#f_'+k).value);P.act=+$('#f_act').value;S.rem=$('#f_rt').value};
+window.recalc=()=>{rd();calc(P);view()};
+window.saveP=()=>{rd();S.p=P;save();P=null;if('Notification' in window)Notification.requestPermission();tab='today';view()};
+window.exp=()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(S)],{type:'application/json'}));a.download='fitdom-'+T+'.json';a.click()};
+window.imp=e=>{const r=new FileReader();r.onload=()=>{try{S=JSON.parse(r.result);save();location.reload()}catch(x){alert('Файл повреждён')}};r.readAsText(e.target.files[0])};
+window.rst=()=>{if(confirm('Удалить все данные?')){localStorage.removeItem('fit1');location.reload()}};
+function settings(){P=P||{...(S.p||{age:18,h:170,w:80,bf:20,act:1.375,gw:74,steps:9000,sleep:8})};if(!P.kcal)calc(P);
+const f=(k,l)=>`<label>${l}</label><input id="f_${k}" type="number" step="any" value="${P[k]}">`;
+return `<h2>${S.p?'Настройки':'Привет! Введи данные'}</h2><div class="card">${f('age','Возраст')}${f('h','Рост, см')}${f('w','Вес, кг')}${f('bf','% жира')}${f('gw','Целевой вес, кг')}
+<label>Активность</label><select id="f_act">${[[1.2,'Сидячий'],[1.375,'Лёгкая (1–3 тренировки)'],[1.55,'Средняя (4–5 тренировок)'],[1.725,'Высокая']].map(([v,t])=>`<option value="${v}"${P.act==v?' selected':''}>${t}</option>`).join('')}</select>
+<button class="btn s" onclick="recalc()">Пересчитать нормы</button><div class="m">Обмен ${P.bmr||'—'} · расход ${P.tdee||'—'} ккал. Дефицит 400 ккал. Поля ниже можно править.</div></div>
+<div class="card"><h3>Цели на день</h3>${f('kcal','Калории')}${f('prot','Белок, г')}${f('fat','Жиры, г')}${f('carb','Углеводы, г')}${f('water','Вода, л')}${f('steps','Шаги')}${f('sleep','Сон, ч')}<label>Напоминание о тренировке</label><input id="f_rt" type="time" value="${S.rem}"></div>
+<button class="btn" onclick="saveP()">Сохранить</button>${S.p?`<div class="card"><h3>Данные</h3><button class="btn s" onclick="exp()">Экспорт JSON</button><label class="btn s" style="display:block;text-align:center">Импорт JSON<input type="file" accept=".json" hidden onchange="imp(event)"></label><button class="btn s" style="color:#ff6b6b" onclick="rst()">Сбросить всё</button></div>`:''}`}
+// ---------- Навигация ----------
+const TABS=[['today','🏠','Сегодня'],['food','🍽','Питание'],['train','💪','Тренировки'],['prog','📈','Прогресс'],['set','⚙️','Настройки']];
+function view(){if(!S.p)tab='set';if(tab!='set')P=null;
+$('#v').innerHTML=({today,food,train,prog,set:settings,work,done})[tab]();
+$('#n').innerHTML=TABS.map(([k,i,t])=>`<button class="${k==tab||(k=='train'&&(tab=='work'||tab=='done'))?'on':''}" onclick="tab='${k}';view()"><b>${i}</b>${t}</button>`).join('');
+$('#n').style.display=S.p?'flex':'none'}
+view();
+// ---------- Напоминания (работают, пока приложение открыто) ----------
+setInterval(()=>{if(!S.p||!('Notification' in window)||Notification.permission!='granted')return;
+if(new Date().toTimeString().slice(0,5)==S.rem&&S.nt!=T){S.nt=T;save();const l=S.w[S.w.length-1],old=!l||(Date.now()-new Date(l.d))>6048e5;
+try{new Notification('ФитДом',{body:(PLAN[dow()][1]?'Время тренировки.':'Не забудь про шаги и воду.')+(old?' Пора взвеситься.':'')})}catch(e){}}},30000);
+// ---------- PWA: манифест из blob и service worker (нужен хостинг по https) ----------
+try{const ic='data:image/svg+xml,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" fill="#0f1115"/><text x="256" y="330" font-size="260" text-anchor="middle">💪</text></svg>');
+const m={name:'ФитДом',short_name:'ФитДом',display:'standalone',background_color:'#0f1115',theme_color:'#0f1115',start_url:location.href.split('#')[0],icons:[{src:ic,sizes:'any',type:'image/svg+xml'}]};
+const l=document.createElement('link');l.rel='manifest';l.href=URL.createObjectURL(new Blob([JSON.stringify(m)],{type:'application/manifest+json'}));document.head.appendChild(l);
+if('serviceWorker' in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('sw.js').catch(()=>{})}catch(e){}
+</script></body></html>
